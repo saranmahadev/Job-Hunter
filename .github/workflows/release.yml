@@ -1,0 +1,75 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: Interview Tracker.exe
+            asset_name: interview-tracker-windows.zip
+            path_to_zip: dist/Interview Tracker
+          - os: ubuntu-latest
+            artifact_name: Interview Tracker
+            asset_name: interview-tracker-linux.tar.gz
+            path_to_zip: dist/Interview Tracker
+          - os: macos-latest
+            artifact_name: Interview Tracker.app
+            asset_name: interview-tracker-macos.zip
+            path_to_zip: dist/Interview Tracker.app
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[dev]
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: pyinstaller build.spec
+
+    # Windows Packaging
+    - name: Zip Artifact (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        Compress-Archive -Path "dist/Interview Tracker/*" -DestinationPath "${{ matrix.asset_name }}"
+
+    # Linux Packaging
+    - name: Tar Artifact (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cd dist
+        tar -czvf "../${{ matrix.asset_name }}" "Interview Tracker"
+
+    # macOS Packaging
+    - name: Zip Artifact (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        cd dist
+        zip -r "../${{ matrix.asset_name }}" "Interview Tracker.app"
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.asset_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
